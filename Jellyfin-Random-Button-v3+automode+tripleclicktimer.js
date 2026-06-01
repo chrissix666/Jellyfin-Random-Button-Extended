@@ -3,7 +3,7 @@
 
     const FETCH_LIMIT = 50;
     const MAX_RETRIES = 15;
-    const DEFAULT_INTERVAL_MS = 12000; // Standard 12s
+    const DEFAULT_INTERVAL_MS = 24000; // Standard 24s
 
     const MOVIES_PARENT_ID = 'pasteyouridhere';
     const TVSHOWS_PARENT_ID = 'pasteyouridhere';
@@ -20,11 +20,11 @@
      * ICONS & CSS
      **********************/
     const injectMaterialIcons = () => {
-        if (document.getElementById('material-icons-stylesheet')) return;
+        if (document.getElementById('jf-material-symbols')) return;
         const link = document.createElement('link');
-        link.id = 'material-icons-stylesheet';
+        link.id = 'jf-material-symbols';
         link.rel = 'stylesheet';
-        link.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
+        link.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined';
         document.head.appendChild(link);
     };
 
@@ -34,9 +34,13 @@
         style.id = 'random-movie-button-custom-css';
         style.innerHTML = `
         .random-movie-button .md-icon {
-            font-family: 'Material Icons' !important;
+            font-family: 'Material Symbols Outlined' !important;
+            font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;
             font-style: normal !important;
             font-size: 24px !important;
+            display: inline-block;
+            vertical-align: middle;
+            line-height: 1;
         }
         .timer-display {
             margin-left: 4px;
@@ -272,7 +276,7 @@
             btn.id = 'randomMovieButton';
             btn.className = 'random-movie-button emby-button button-flat button-flat-hover';
             btn.title = 'Random Movie, Series, or Collection';
-            btn.innerHTML = `<i class="md-icon random-icon">${getStandardIcon()}</i><span class="timer-display"></span>`;
+            btn.innerHTML = `<i class="md-icon random-icon material-symbols-outlined">${getStandardIcon()}</i><span class="timer-display"></span>`;
 
             let clickCount = 0;
             let clickTimer = null;
@@ -315,21 +319,12 @@
             container.appendChild(btn);
 
             // Force leftmost position
-			const headerRight = document.querySelector('.headerRight');
-
-				if (!headerRight) {
-				setTimeout(addButton, 200);
-				return;
-						}
-
-			headerRight.prepend(container);
+            const headerRight = document.querySelector('.headerRight');
+            if (headerRight) headerRight.prepend(container);
 
             const observer = new MutationObserver(() => {
                 const container = document.getElementById('randomMovieButtonContainer');
-				if (!container) {
-					addButton();
-					return;
-				}
+                if (!container) return;
                 if (window.location.hash.startsWith('#/video')) { container.remove(); setModeManual(); }
                 else {
                     const headerRight = document.querySelector('.headerRight');
@@ -359,9 +354,9 @@
         addButton();
     };
 
-    const waitForApiClient = () => {
-        if (window.ApiClient?.getCurrentUserId) init();
-        else setTimeout(waitForApiClient, 200);
+    const waitForHeader = () => {
+        if (document.querySelector('.headerRight')) init();
+        else setTimeout(waitForHeader, 200);
     };
-    waitForApiClient();
+    waitForHeader();
 })();
