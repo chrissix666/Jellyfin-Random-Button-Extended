@@ -315,12 +315,21 @@
             container.appendChild(btn);
 
             // Force leftmost position
-            const headerRight = document.querySelector('.headerRight');
-            if (headerRight) headerRight.prepend(container);
+			const headerRight = document.querySelector('.headerRight');
+
+				if (!headerRight) {
+				setTimeout(addButton, 200);
+				return;
+						}
+
+			headerRight.prepend(container);
 
             const observer = new MutationObserver(() => {
                 const container = document.getElementById('randomMovieButtonContainer');
-                if (!container) return;
+				if (!container) {
+					addButton();
+					return;
+				}
                 if (window.location.hash.startsWith('#/video')) { container.remove(); setModeManual(); }
                 else {
                     const headerRight = document.querySelector('.headerRight');
