@@ -19,15 +19,6 @@
     /**********************
      * ICONS & CSS
      **********************/
-    const injectMaterialIcons = () => {
-        if (document.getElementById('jf-material-symbols')) return;
-        const link = document.createElement('link');
-        link.id = 'jf-material-symbols';
-        link.rel = 'stylesheet';
-        link.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined';
-        document.head.appendChild(link);
-    };
-
     const injectCustomCss = () => {
         if (document.getElementById('random-movie-button-custom-css')) return;
         const style = document.createElement('style');
@@ -71,6 +62,22 @@
         document.head.appendChild(style);
     };
 
+    // Inline SVG icons instead of relying on the "Material Symbols Outlined"
+    // icon font loaded from fonts.googleapis.com: whenever that font couldn't
+    // load (blocked, offline, privacy extensions) or hadn't loaded yet, the
+    // ligature text (e.g. "casino") was shown instead of the icon. The
+    // paths are the glyphs of the exact font file fonts.googleapis.com
+    // serves for this family, drawn at the same 24px, so the icons look
+    // exactly as before, and the font no longer needs to be requested.
+    const ICON_PATHS = {
+        casino: 'M300.0 -240.0Q325 -240 342.5 -257.5Q360 -275 360.0 -300.0Q360 -325 342.5 -342.5Q325 -360 300.0 -360.0Q275 -360 257.5 -342.5Q240 -325 240.0 -300.0Q240 -275 257.5 -257.5Q275 -240 300.0 -240.0ZM300.0 -600.0Q325 -600 342.5 -617.5Q360 -635 360.0 -660.0Q360 -685 342.5 -702.5Q325 -720 300.0 -720.0Q275 -720 257.5 -702.5Q240 -685 240.0 -660.0Q240 -635 257.5 -617.5Q275 -600 300.0 -600.0ZM480.0 -420.0Q505 -420 522.5 -437.5Q540 -455 540.0 -480.0Q540 -505 522.5 -522.5Q505 -540 480.0 -540.0Q455 -540 437.5 -522.5Q420 -505 420.0 -480.0Q420 -455 437.5 -437.5Q455 -420 480.0 -420.0ZM660.0 -240.0Q685 -240 702.5 -257.5Q720 -275 720.0 -300.0Q720 -325 702.5 -342.5Q685 -360 660.0 -360.0Q635 -360 617.5 -342.5Q600 -325 600.0 -300.0Q600 -275 617.5 -257.5Q635 -240 660.0 -240.0ZM660.0 -600.0Q685 -600 702.5 -617.5Q720 -635 720.0 -660.0Q720 -685 702.5 -702.5Q685 -720 660.0 -720.0Q635 -720 617.5 -702.5Q600 -685 600.0 -660.0Q600 -635 617.5 -617.5Q635 -600 660.0 -600.0ZM200 -120Q167 -120 143.5 -143.5Q120 -167 120 -200V-760Q120 -793 143.5 -816.5Q167 -840 200 -840H760Q793 -840 816.5 -816.5Q840 -793 840 -760V-200Q840 -167 816.5 -143.5Q793 -120 760 -120ZM200 -200H760Q760 -200 760.0 -200.0Q760 -200 760 -200V-760Q760 -760 760.0 -760.0Q760 -760 760 -760H200Q200 -760 200.0 -760.0Q200 -760 200 -760V-200Q200 -200 200.0 -200.0Q200 -200 200 -200ZM200 -760Q200 -760 200.0 -760.0Q200 -760 200 -760V-200Q200 -200 200.0 -200.0Q200 -200 200 -200Q200 -200 200.0 -200.0Q200 -200 200 -200V-760Q200 -760 200.0 -760.0Q200 -760 200 -760Z',
+        hourglass_empty: 'M320 -160H640V-280Q640 -346 593.0 -393.0Q546 -440 480.0 -440.0Q414 -440 367.0 -393.0Q320 -346 320 -280ZM640 -680V-800H320V-680Q320 -614 367.0 -567.0Q414 -520 480.0 -520.0Q546 -520 593.0 -567.0Q640 -614 640 -680ZM160 -80V-160H240V-280Q240 -341 268.5 -394.5Q297 -448 348 -480Q297 -512 268.5 -565.5Q240 -619 240 -680V-800H160V-880H800V-800H720V-680Q720 -619 691.5 -565.5Q663 -512 612 -480Q663 -448 691.5 -394.5Q720 -341 720 -280V-160H800V-80Z'
+    };
+
+    function iconSvg(name) {
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true" style="display:block"><path d="' + ICON_PATHS[name] + '"/></svg>';
+    }
+
     const getStandardIcon = () => manualMode ? 'casino' : 'hourglass_empty';
     const getFetchingIcon = () => manualMode ? 'hourglass_empty' : 'casino';
     const updateButtonIcon = (fetching = false) => {
@@ -81,7 +88,7 @@
         const iconElem = btn.querySelector('.md-icon');
 
         if (iconElem) {
-            iconElem.textContent = icon;
+            iconElem.innerHTML = iconSvg(icon);
             if (fetching) iconElem.classList.add('rotating');
             else iconElem.classList.remove('rotating');
         }
@@ -276,7 +283,7 @@
             btn.id = 'randomMovieButton';
             btn.className = 'random-movie-button emby-button button-flat button-flat-hover';
             btn.title = 'Random Movie, Series, or Collection';
-            btn.innerHTML = `<i class="md-icon random-icon material-symbols-outlined">${getStandardIcon()}</i><span class="timer-display"></span>`;
+            btn.innerHTML = `<i class="md-icon random-icon material-symbols-outlined">${iconSvg(getStandardIcon())}</i><span class="timer-display"></span>`;
 
             let clickCount = 0;
             let clickTimer = null;
@@ -349,7 +356,6 @@
     setInterval(monitorHash, 200);
 
     const init = () => {
-        injectMaterialIcons();
         injectCustomCss();
         addButton();
     };
