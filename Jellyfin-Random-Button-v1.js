@@ -61,14 +61,12 @@
         .random-movie-button .md-icon {
             font-family: 'Material Icons' !important;
             font-style: normal !important;
-            font-size: 24px !important;
         }
-        button#randomMovieButton {
-            padding: 0px !important;
-            margin: 0px 5px 0 10px !important;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+        /* The button uses Jellyfin's own header button classes; only the
+           wrapper is neutralised so the button sits in the header row
+           exactly like SyncPlay, Cast and Search. */
+        #randomMovieButtonContainer {
+            display: contents;
         }`;
         document.head.appendChild(style);
     };
@@ -315,20 +313,16 @@
      * Creates the button, wires click behavior, and
      * keeps it in sync with navigation changes.
      ************************************************/
-    const addButton = () => {
-        // Do not show button on video playback screen
-        if (window.location.hash.startsWith('#/video')) return;
-        if (document.getElementById('randomMovieButton')) return;
-
+    const buildButton = () => {
         const btn = document.createElement('button');
+        btn.type = 'button';
         btn.id = 'randomMovieButton';
-        btn.className = 'random-movie-button emby-button button-flat button-flat-hover';
         btn.title = 'Random Movie, Series, or Collection';
-        btn.innerHTML = `<i class="md-icon random-icon">casino</i>`;
+        btn.innerHTML = `<i class="md-icon random-icon material-icons" aria-hidden="true">casino</i>`;
 
         btn.addEventListener('click', async () => {
             btn.disabled = true;
-            btn.innerHTML = `<i class="md-icon random-icon">hourglass_empty</i>`;
+            btn.innerHTML = `<i class="md-icon random-icon material-icons" aria-hidden="true">hourglass_empty</i>`;
 
             try {
                 let item = null;
@@ -377,9 +371,22 @@
                 if (item) openItem(item, parentId);
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = `<i class="md-icon random-icon">casino</i>`;
+                btn.innerHTML = `<i class="md-icon random-icon material-icons" aria-hidden="true">casino</i>`;
             }
         });
+        return btn;
+    };
+
+    const addButton = () => {
+        // Do not show button on video playback screen
+        if (window.location.hash.startsWith('#/video')) return;
+        if (document.getElementById('randomMovieButton')) return;
+
+        // Same classes as Jellyfin's own header buttons (SyncPlay, Cast,
+        // Search), so size, round hover/active highlight and colour come
+        // from Jellyfin's stylesheet and the active theme, 1:1.
+        const btn = buildButton();
+        btn.className = 'random-movie-button headerButton headerButtonRight paper-icon-button-light';
 
         const container = document.createElement('div');
         container.id = 'randomMovieButtonContainer';
@@ -415,6 +422,116 @@
      * Polls the URL hash to detect navigation changes
      * in single-page application environments.
      ************************************************/
+    /**********************
+     * EXPERIMENTAL LAYOUT (MUI toolbar)
+     **********************/
+    // jellyfin-web's Experimental layout hides the classic header
+    // (RootAppRouter renders <AppHeader isHidden>), so .headerRight is never
+    // visible there. Its toolbar is a MUI AppBar whose right-hand buttons
+    // (SyncPlay, Cast, Search) share one flex box; Search is always a link
+    // to search.html, so that link's parent is the box. RootAppRouter picks
+    // the layout once per page load from this localStorage key.
+    const IS_EXPERIMENTAL_LAYOUT = localStorage.getItem('layout') === 'experimental';
+
+    // Left-to-right order of the custom header buttons (Random, Autoscroll,
+    // Fullscreen, Cinema), so they line up the same in both layouts no
+    // matter which script runs first.
+    const HEADER_BUTTON_ORDER = ['randomMovieButton', 'jf-scroll-btn', 'jf-fullscreen-btn', 'jf-cinema-btn'];
+
+    function getMuiToolbarBox() {
+        const searchLink = document.querySelector('.MuiAppBar-root a[href*="search.html"]');
+        return searchLink ? searchLink.parentElement : null;
+    }
+
+    // Hover tint of Jellyfin's own toolbar buttons (MUI IconButton,
+    // color 'inherit'): palette.action.active at action.hoverOpacity, i.e.
+    // white 8 % in the dark MUI themes, black 4 % in Light and Apple TV.
+    function getMuiHoverColor() {
+        const link = document.querySelector('link[href*="/themes/"][href$="theme.css"]');
+        return link && /\/themes\/(light|appletv)\//.test(link.href) ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 255, 255, 0.08)';
+    }
+
+    // In the classic header Random sits in its own wrapper div.
+    function headerButtonRank(el) {
+        return el.id === 'randomMovieButtonContainer' ? 0 : HEADER_BUTTON_ORDER.indexOf(el.id);
+    }
+
+    // Puts el into box right before the first element that belongs after
+    // it: a Jellyfin button or a custom button later in the order.
+    function placeInOrder(box, el) {
+        const myRank = headerButtonRank(el);
+        let ref = null;
+        for (const child of box.children) {
+            if (child === el) continue;
+            const rank = headerButtonRank(child);
+            if (rank === -1 || rank > myRank) { ref = child; break; }
+        }
+        if (el.parentElement !== box || el.nextElementSibling !== ref) box.insertBefore(el, ref);
+    }
+
+    function placeInMuiToolbar(btn) {
+        const box = getMuiToolbarBox();
+        if (!box) return;
+        placeInOrder(box, btn);
+        btn.style.setProperty('--jf-mui-hover', getMuiHoverColor());
+    }
+
+    // Same box, padding, icon size, colour and hover transition as MUI's
+    // <IconButton size="large" color="inherit"> (@mui/material 5.16.7):
+    // 12px padding around a 1.5rem icon (SvgIcon 'medium'), round, icon
+    // keeps the toolbar colour.
+    function muiButtonCss(id) {
+        return `
+            #${id}.jf-mui-header-btn {
+                display:inline-flex; align-items:center; justify-content:center;
+                position:relative; box-sizing:border-box; flex:0 0 auto;
+                padding:12px; margin:0; border:0; border-radius:50%;
+                background-color:transparent; color:inherit; font-size:1.75rem;
+                cursor:pointer; outline:0; vertical-align:middle;
+                -webkit-tap-highlight-color:transparent;
+                transition:background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;
+            }
+            #${id}.jf-mui-header-btn > .material-icons { font-size:1.5rem; line-height:1; }
+            @media (hover: hover) {
+                #${id}.jf-mui-header-btn:hover { background-color:var(--jf-mui-hover, rgba(255, 255, 255, 0.08)); }
+            }
+        `;
+    }
+
+    function injectMuiStyle(styleId, buttonId) {
+        if (document.getElementById(styleId)) return;
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = muiButtonCss(buttonId);
+        document.head.appendChild(style);
+    }
+
+    // The toolbar unmounts on the video route and has no buttons on the
+    // login/server pages, so the button is (re)placed whenever the DOM
+    // changes; at most once per frame.
+    function watchMuiToolbar(onChange) {
+        let queued = false;
+        const run = () => { queued = false; onChange(); };
+        const start = () => {
+            if (!document.body) { setTimeout(start, 200); return; }
+            run();
+            new MutationObserver(() => {
+                if (!queued) { queued = true; requestAnimationFrame(run); }
+            }).observe(document.body, { childList: true, subtree: true });
+        };
+        start();
+    }
+
+    const createExperimentalButton = () => {
+        if (!getMuiToolbarBox()) return;
+        let btn = document.getElementById('randomMovieButton');
+        if (!btn) {
+            btn = buildButton();
+            btn.className = 'random-movie-button jf-mui-header-btn';
+        }
+        placeInMuiToolbar(btn);
+    };
+
     let lastHash = window.location.hash;
     const monitorHash = () => {
         if (window.location.hash !== lastHash) {
@@ -423,7 +540,6 @@
         }
     };
 
-    setInterval(monitorHash, 200);
 
 
     /************************************************
@@ -441,5 +557,13 @@
         else setTimeout(waitForApiClient, 200);
     };
 
-    waitForApiClient();
+    if (IS_EXPERIMENTAL_LAYOUT) {
+        injectMaterialIcons();
+        injectCustomCss();
+        injectMuiStyle('random-movie-button-mui-css', 'randomMovieButton');
+        watchMuiToolbar(createExperimentalButton);
+    } else {
+        setInterval(monitorHash, 200);
+        waitForApiClient();
+    }
 })();
