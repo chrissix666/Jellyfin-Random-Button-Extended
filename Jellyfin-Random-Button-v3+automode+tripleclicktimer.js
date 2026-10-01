@@ -24,27 +24,27 @@
         const style = document.createElement('style');
         style.id = 'random-movie-button-custom-css';
         style.innerHTML = `
-        .random-movie-button .md-icon {
-            font-family: 'Material Symbols Outlined' !important;
-            font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;
-            font-style: normal !important;
-            font-size: 24px !important;
-            display: inline-block;
-            vertical-align: middle;
-            line-height: 1;
+        /* The button uses Jellyfin's own header button classes; only the
+           wrapper is neutralised so the button sits in the header row
+           exactly like SyncPlay, Cast and Search. */
+        #randomMovieButtonContainer {
+            display: contents;
         }
-        .timer-display {
-            margin-left: 4px;
-            font-weight: bold;
-            font-size: 14px;
-            vertical-align: middle;
-        }
-        button#randomMovieButton {
-            padding: 0px !important;
-            margin: 0px 5px 0 10px !important;
-            display: inline-flex;
+        /* Overlaid on the icon, so the round button keeps its shape
+           while the timer number is shown. */
+        #randomMovieButton .timer-display {
+            position: absolute;
+            inset: 0;
+            display: flex;
             align-items: center;
             justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            z-index: 2;
+            pointer-events: none;
+        }
+        #randomMovieButton .timer-display:empty {
+            display: none;
         }
         @keyframes dice {
             0% { transform: rotate(0deg); }
@@ -74,8 +74,10 @@
         hourglass_empty: 'M320 -160H640V-280Q640 -346 593.0 -393.0Q546 -440 480.0 -440.0Q414 -440 367.0 -393.0Q320 -346 320 -280ZM640 -680V-800H320V-680Q320 -614 367.0 -567.0Q414 -520 480.0 -520.0Q546 -520 593.0 -567.0Q640 -614 640 -680ZM160 -80V-160H240V-280Q240 -341 268.5 -394.5Q297 -448 348 -480Q297 -512 268.5 -565.5Q240 -619 240 -680V-800H160V-880H800V-800H720V-680Q720 -619 691.5 -565.5Q663 -512 612 -480Q663 -448 691.5 -394.5Q720 -341 720 -280V-160H800V-80Z'
     };
 
+    // Sized 1em so the icon follows the font size Jellyfin gives its own
+    // header icons (.paper-icon-button-light > .material-icons).
     function iconSvg(name) {
-        return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true" style="display:block"><path d="' + ICON_PATHS[name] + '"/></svg>';
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true" style="display:block"><path d="' + ICON_PATHS[name] + '"/></svg>';
     }
 
     const getStandardIcon = () => manualMode ? 'casino' : 'hourglass_empty';
@@ -279,11 +281,15 @@
         // Pop-in fix: always try to add button
         if (!document.getElementById('randomMovieButton')) {
 
+            // Same classes as Jellyfin's own header buttons (SyncPlay, Cast,
+            // Search), so size, round hover/active highlight and colour come
+            // from Jellyfin's stylesheet and the active theme, 1:1.
             const btn = document.createElement('button');
+            btn.type = 'button';
             btn.id = 'randomMovieButton';
-            btn.className = 'random-movie-button emby-button button-flat button-flat-hover';
+            btn.className = 'random-movie-button headerButton headerButtonRight paper-icon-button-light';
             btn.title = 'Random Movie, Series, or Collection';
-            btn.innerHTML = `<i class="md-icon random-icon material-symbols-outlined">${iconSvg(getStandardIcon())}</i><span class="timer-display"></span>`;
+            btn.innerHTML = `<span class="material-icons md-icon random-icon" aria-hidden="true">${iconSvg(getStandardIcon())}</span><span class="timer-display"></span>`;
 
             let clickCount = 0;
             let clickTimer = null;
