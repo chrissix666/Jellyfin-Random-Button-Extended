@@ -634,7 +634,10 @@
                 container.id = 'randomMovieButtonContainer';
             }
             if (btn.parentElement !== container) container.appendChild(btn);
-            placeInOrder(box, container);
+            // Place once, as on 10.10.7; re-order only when the button is not
+            // in the box (new header, layout switch), so other header scripts
+            // that move themselves are not fought on every DOM change.
+            if (container.parentElement !== box) placeInOrder(box, container);
         }
     };
 
