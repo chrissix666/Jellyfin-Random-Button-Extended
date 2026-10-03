@@ -1,14 +1,15 @@
 (function () {
     'use strict';
 
-    /* jfcompat 1.0 - one script for Jellyfin web 10.10.7 and 12.1.
+    /* jfcompat 1.1 - one script for Jellyfin web 10.10.7 and 12.1 (1.1: layout
+     * setting scheme of 10.11 = 10.10, isModernLayoutModel).
      * Paste this block unchanged at the top of a script (inside its IIFE).
      * It is pure: no side effects at load, no globals except window.jfcompat
      * (set only when absent, for console checks; scripts use the local const).
      * Rule: on 10.10.7 every answer equals what the scripts computed before. */
     const jfcompat = (function () {
         'use strict';
-        const VERSION = '1.0';
+        const VERSION = '1.1';
 
         // ---------- version ----------
         // The web client ships with the server, so the server version decides.
@@ -28,12 +29,28 @@
             } catch (e) { /* ignore */ }
             return null;
         }
-        // 12.x model: modern layout default, routes without .html, legacy auth off.
-        // 10.11 was not audited; treated as the new model (live-check before relying on it).
+        // New model (>= 10.11): routes without .html, no Trailers tab on the
+        // Movies pages. Audited 2026-10-02 against web 10.11.11 (appRouter.js:404,
+        // moviesrecommended.js:229-241, apps/experimental/routes/movies/index.tsx:46-51).
+        // The layout setting is NOT part of it: 10.11 still has the 10.10 scheme,
+        // see isModernLayoutModel().
         function isNewModel() {
             const v = serverVersion();
             if (v) return v.major > 10 || (v.major === 10 && v.minor >= 11);
             return document.documentElement.hasAttribute('data-theme');
+        }
+
+        // Layout setting scheme of 12.x: modern by default, 'desktop-legacy' /
+        // 'mobile-legacy' / 'tv' classic (constants/layoutMode.ts, apphost.js
+        // 12.0:185-186). 10.10 and 10.11 instead: classic by default, MUI only for
+        // 'experimental' (layoutManager.js identical in 10.10.7 and 10.11.11,
+        // RootAppRouter.tsx 10.11.11:21-22). Without a server version the 12.x
+        // hint of isNewModel() decides (10.11 sets data-theme too; the DOM check
+        // in getLayout() comes first anyway).
+        function isModernLayoutModel() {
+            const v = serverVersion();
+            if (v) return v.major >= 12;
+            return isNewModel();
         }
 
         // ---------- routes ----------
@@ -92,7 +109,7 @@
             // 2) the setting, read the way each version reads it (not cached)
             let v = '';
             try { v = localStorage.getItem('layout') || ''; } catch (e) { /* ignore */ }
-            if (isNewModel()) return LEGACY_12.indexOf(v) >= 0 ? 'classic' : 'mui';
+            if (isModernLayoutModel()) return LEGACY_12.indexOf(v) >= 0 ? 'classic' : 'mui';
             return v === 'experimental' ? 'mui' : 'classic';
         }
         function isMui() { return getLayout() === 'mui'; }
@@ -208,7 +225,7 @@
         if (!window.jfcompat) window.jfcompat = api;
         return api;
     })();
-    /* end jfcompat 1.0 */
+    /* end jfcompat 1.1 */
 
     /************************************************
      * SCRIPT OVERVIEW
@@ -239,27 +256,39 @@
     const HOME1_PARENT_ID = 'pasteyouridhere';
     const HOME2_PARENT_ID = 'pasteyouridhere';
 
-    // Helper to always resolve the current server base URL
-    const getServerAddress = () => window.location.origin;
+    // An ID still set to this placeholder means "not configured"
+    const PLACEHOLDER_ID = 'pasteyouridhere';
+
+    // Helper to always resolve the current server base URL. ApiClient knows
+    // the server address incl. a reverse-proxy base path ('/jellyfin');
+    // window.location.origin does not. Same URL on a server at the root.
+    const getServerAddress = () => {
+        try {
+            if (window.ApiClient && typeof ApiClient.serverAddress === 'function') {
+                const address = ApiClient.serverAddress();
+                if (address) return String(address).replace(/\/+$/, '');
+            }
+        } catch (e) { /* use the page origin below */ }
+        return window.location.origin;
+    };
+
+    // True only while a user is signed in (not on the login page)
+    const hasUser = () => {
+        try {
+            return !!(window.ApiClient && ApiClient.getCurrentUserId());
+        } catch (e) {
+            return false;
+        }
+    };
 
 
     /************************************************
      * ICONS & CSS INJECTION
      * ------------------------------------------------
-     * Dynamically injects Google Material Icons and
-     * minimal custom CSS required for the button.
+     * Injects the minimal custom CSS required for the
+     * button. The 'Material Icons' font itself ships
+     * with Jellyfin (no request to Google Fonts).
      ************************************************/
-    const injectMaterialIcons = () => {
-        // Prevent duplicate stylesheet injection
-        if (document.getElementById('material-icons-stylesheet')) return;
-
-        const link = document.createElement('link');
-        link.id = 'material-icons-stylesheet';
-        link.rel = 'stylesheet';
-        link.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
-        document.head.appendChild(link);
-    };
-
     const injectCustomCss = () => {
         // Prevent duplicate style injection
         if (document.getElementById('random-movie-button-custom-css')) return;
@@ -298,9 +327,11 @@
         if (!parentId) {
             // Route names without '.html' (12.x dropped it). 'livetv' counts
             // as tv, as the former test hash.includes('tv.html') did.
+            // 'list' without a parentId is a genre/studio/tag/Next Up list,
+            // not the Collections library, so it falls through to the
+            // global pick (a Collections library always carries its id).
             if (jfcompat.isRoute('movies')) parentId = MOVIES_PARENT_ID;
             else if (jfcompat.isRoute('tv', 'livetv')) parentId = TVSHOWS_PARENT_ID;
-            else if (jfcompat.isRoute('list')) parentId = COLLECTIONS_PARENT_ID;
         }
 
         return parentId || null;
@@ -326,7 +357,7 @@
 
             const url = `${getServerAddress()}/Users/${userId}/Items/${itemId}?Fields=Type,SeriesId,ParentId`;
             return await ApiClient.ajax({ type: 'GET', url, dataType: 'json' });
-        } catch {
+        } catch (e) {
             // Fail silently and let higher-level logic decide
             return null;
         }
@@ -340,6 +371,9 @@
      * and filters them by expected item type.
      ************************************************/
     const fetchRandomItem = async (parentId, attempt = 1) => {
+        // A placeholder is not a valid id: the server answers 400 every
+        // time, so the request (and its 15 retries) is skipped.
+        if (parentId === PLACEHOLDER_ID) return null;
         try {
             const userId = ApiClient.getCurrentUserId();
             if (!userId) return null;
@@ -365,7 +399,9 @@
             }
 
             return filtered[Math.floor(Math.random() * filtered.length)] || null;
-        } catch {
+        } catch (e) {
+            // 400 = the request itself is wrong; a retry gets the same answer
+            if (e && e.status === 400) return null;
             return attempt < MAX_RETRIES
                 ? fetchRandomItem(parentId, attempt + 1)
                 : null;
@@ -387,9 +423,10 @@
         const candidates = [movies, series, sets].filter(Boolean);
         const item = candidates[Math.floor(Math.random() * candidates.length)];
 
-        const parentId = item?.Type === 'Movie'
+        const type = item ? item.Type : undefined;
+        const parentId = type === 'Movie'
             ? MOVIES_PARENT_ID
-            : item?.Type === 'Series'
+            : type === 'Series'
                 ? TVSHOWS_PARENT_ID
                 : COLLECTIONS_PARENT_ID;
 
@@ -410,7 +447,7 @@
             COLLECTIONS_PARENT_ID,
             HOME1_PARENT_ID,
             HOME2_PARENT_ID
-        ].every(id => !id || id === 'pasteyouridhere');
+        ].every(id => !id || id === PLACEHOLDER_ID);
 
         // If real IDs exist, do not use this fallback
         if (!idsArePlaceholder) return null;
@@ -429,7 +466,7 @@
 
             const item = candidates[Math.floor(Math.random() * candidates.length)];
             return { item, parentId: 'ALL' };
-        } catch {
+        } catch (e) {
             return await fetchHomeFallback();
         }
     };
@@ -441,7 +478,7 @@
      * Opens the selected item in the web interface.
      ************************************************/
     const openItem = (item, parentId) => {
-        if (!item?.Id) return;
+        if (!item || !item.Id) return;
 
         const serverId = ApiClient.serverId();
         // '#/details' directly: the '#!' form only reached it through a
@@ -483,38 +520,28 @@
             try {
                 const { Items = [] } = await ApiClient.ajax({ type: 'GET', url, dataType: 'json' });
                 return Items[Math.floor(Math.random() * Items.length)] || null;
-            } catch {
+            } catch (e) {
                 return null;
             }
         }
 
         // EPISODE VIEW:
-        // Pick a random episode from the entire series
+        // Pick a random episode from the entire series. One recursive
+        // request over all seasons instead of one request per season;
+        // every episode stays equally likely.
         if (currentItem.Type === 'Episode') {
             try {
-                const seasonsResponse = await ApiClient.ajax({
+                const episodesResponse = await ApiClient.ajax({
                     type: 'GET',
-                    url: `${getServerAddress()}/Users/${userId}/Items?ParentId=${currentItem.SeriesId}&IncludeItemTypes=Season&Fields=Id&_=${Date.now()}`,
+                    url: `${getServerAddress()}/Users/${userId}/Items?ParentId=${currentItem.SeriesId}&Recursive=true&IncludeItemTypes=Episode&SortBy=Random&Limit=1&Fields=Id&_=${Date.now()}`,
                     dataType: 'json'
                 });
 
-                const seasons = seasonsResponse.Items || [];
-                let allEpisodes = [];
-
-                for (const season of seasons) {
-                    const episodesResponse = await ApiClient.ajax({
-                        type: 'GET',
-                        url: `${getServerAddress()}/Users/${userId}/Items?ParentId=${season.Id}&IncludeItemTypes=Episode&Fields=Id&_=${Date.now()}`,
-                        dataType: 'json'
-                    });
-
-                    allEpisodes = allEpisodes.concat(episodesResponse.Items || []);
+                const episodes = episodesResponse.Items || [];
+                if (episodes.length > 0) {
+                    return episodes[0];
                 }
-
-                if (allEpisodes.length > 0) {
-                    return allEpisodes[Math.floor(Math.random() * allEpisodes.length)];
-                }
-            } catch {
+            } catch (e) {
                 return null;
             }
         }
@@ -553,7 +580,7 @@
                     if (currentItem) {
                         item = await fetchRandomNext(currentItem);
                         if (currentItem.Type === 'Episode') parentId = currentItem.SeriesId;
-                        else parentId = item?.ParentId || currentItem.Id;
+                        else parentId = (item && item.ParentId) || currentItem.Id;
                     }
                 }
 
@@ -605,7 +632,7 @@
     // Left-to-right order of the custom header buttons (Random, Autoscroll,
     // Fullscreen, Cinema), so they line up the same in both layouts no
     // matter which script runs first.
-    const HEADER_BUTTON_ORDER = ['randomMovieButton', 'jf-scroll-btn', 'jf-fullscreen-btn', 'jf-cinema-btn'];
+    const HEADER_BUTTON_ORDER = ['randomMovieButton', 'jf-scroll-btn', 'jf-fullscreen-btn', 'jf-cinema-btn', 'jf-destroy-btn'];
 
     // In the classic header Random sits in its own wrapper div.
     function headerButtonRank(el) {
@@ -614,6 +641,7 @@
 
     // Puts el into box right before the first element that belongs after
     // it: a Jellyfin button or a custom button later in the order.
+    // Returns true when it had to move el.
     function placeInOrder(box, el) {
         const myRank = headerButtonRank(el);
         let ref = null;
@@ -622,7 +650,39 @@
             const rank = headerButtonRank(child);
             if (rank === -1 || rank > myRank) { ref = child; break; }
         }
-        if (el.parentElement !== box || el.nextElementSibling !== ref) box.insertBefore(el, ref);
+        if (el.parentElement !== box || el.nextElementSibling !== ref) { box.insertBefore(el, ref); return true; }
+        return false;
+    }
+
+    // MUI bar: re-order when something moved in front of the button, but at
+    // most REORDER_MAX times per REORDER_WINDOW_MS. After that only a missing
+    // button is placed again, so a foreign script that also puts itself
+    // first on every DOM change cannot start an endless insert loop.
+    const REORDER_MAX = 10;
+    const REORDER_WINDOW_MS = 10000;
+    let reorderTimes = [];
+    function placeInOrderCapped(box, el) {
+        const inBox = el.parentElement === box;
+        if (inBox) {
+            const now = Date.now();
+            reorderTimes = reorderTimes.filter(t => now - t < REORDER_WINDOW_MS);
+            if (reorderTimes.length >= REORDER_MAX) return;
+        }
+        if (placeInOrder(box, el) && inBox) reorderTimes.push(Date.now());
+    }
+
+    // The MUI hover colour needs a style read; it is read again only when
+    // the theme changes. On 12.x the value counts only once it came from the
+    // theme's CSS variables (form 'rgba(r g b / a)'); a read made before the
+    // theme stylesheet applied returns the fallback and is retried.
+    function setMuiHover(btn) {
+        const theme = jfcompat.getThemeId();
+        if (btn.getAttribute('data-jf-mui-theme') === theme) return;
+        const color = jfcompat.getMuiHoverColor();
+        btn.style.setProperty('--jf-mui-hover', color);
+        if (!document.documentElement.hasAttribute('data-theme') || color.indexOf(' / ') >= 0) {
+            btn.setAttribute('data-jf-mui-theme', theme);
+        }
     }
 
     // Same box, padding, icon size, colour and hover transition as MUI's
@@ -665,13 +725,22 @@
             if (container) container.remove();
             return;
         }
+        // No button on the login/server pages: without a user every pick
+        // fails. It comes back with the next header change after sign-in.
+        if (!hasUser()) {
+            const container = document.getElementById('randomMovieButtonContainer');
+            if (container) container.remove();
+            const btn = document.getElementById('randomMovieButton');
+            if (btn) btn.remove();
+            return;
+        }
         if (!box) return;
         const btn = document.getElementById('randomMovieButton') || buildButton();
         if (jfcompat.isMui()) {
             injectMuiStyle('random-movie-button-mui-css', 'randomMovieButton');
             btn.className = 'random-movie-button jf-mui-header-btn';
-            btn.style.setProperty('--jf-mui-hover', jfcompat.getMuiHoverColor());
-            placeInOrder(box, btn);
+            setMuiHover(btn);
+            placeInOrderCapped(box, btn);
             const container = document.getElementById('randomMovieButtonContainer');
             if (container) container.remove();
         } else {
@@ -693,7 +762,6 @@
         }
     };
 
-    injectMaterialIcons();
     injectCustomCss();
     jfcompat.onHeaderBoxChange(placeButton);
 })();
