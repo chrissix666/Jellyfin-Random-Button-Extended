@@ -121,7 +121,7 @@ This ensures the Random Button always opens something.
 
 ## Tested On
 
-- Jellyfin 10.10.7 and 12.0+  
+- Jellyfin Web 10.10.7 and 12.0+  
 - Windows 11  
 - Chrome  
 
