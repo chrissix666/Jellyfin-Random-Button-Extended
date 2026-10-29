@@ -439,7 +439,7 @@
             else if (parentId === TVSHOWS_PARENT_ID) filtered = Items.filter(i => i.Type === 'Series');
             else if (parentId === COLLECTIONS_PARENT_ID && includeSets) filtered = Items.filter(i => i.Type === 'Set' || i.IsFolder);
             else if (parentId === HOME1_PARENT_ID || parentId === HOME2_PARENT_ID) filtered = Items.filter(i => i.Type === 'Video');
-            else if (parentId) filtered = Items.filter(i => i.Type === 'Video');
+            else if (parentId) filtered = Items.filter(i => i.Type === 'Video' || i.Type === 'Movie');
             else filtered = Items.filter(i => ['Movie','Series'].includes(i.Type));
 
             if (!filtered.length && attempt < MAX_RETRIES) return fetchRandomItem(parentId, attempt + 1, includeSets);
