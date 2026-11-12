@@ -409,7 +409,7 @@
         let parentId = params.get('parentid') || params.get('topparentid');
         if (!parentId) {
             // Route names without '.html' (12.x dropped it). 'livetv' counts
-            // as tv, as the former test hash.includes('tv.html') did.
+            // as tv.
             // 'list' without a parentId is a genre/studio/tag/Next Up list,
             // not the Collections library, so it falls through to the
             // global pick (a Collections library always carries its id).
@@ -562,8 +562,7 @@
         try {
             let item = null;
             let parentId = null;
-            // Home page; 'mypreferenceshome' counts too, as the former test
-            // hash.includes('home.html') did.
+            // Home page; 'mypreferenceshome' counts too.
             const onHome = jfcompat.isRoute('home', 'mypreferenceshome');
             const currentId = getCurrentItemId();
             if (currentId) {
