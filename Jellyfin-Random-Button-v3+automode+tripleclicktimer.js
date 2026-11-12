@@ -227,17 +227,24 @@
     })();
     /* end jfcompat 1.1 */
 
+    // One copy per page, also when the Essentials plugin and the JavaScript Injector both load it.
+    if (window.__jfRandomButton) return;
+    window.__jfRandomButton = true;
+
+    // Settings from the Essentials plugin; without it the values below hold.
+    const essentials = (window.JellyfinEssentials && window.JellyfinEssentials.settings && window.JellyfinEssentials.settings.random) || {};
+
     const FETCH_LIMIT = 50;
     const MAX_RETRIES = 15;
     // Auto mode stops after this many picks in a row that found nothing
     // because the server rejected the request (400).
     const AUTOMODE_MAX_BAD_PICKS = 3;
 
-    const MOVIES_PARENT_ID = 'pasteyouridhere';
-    const TVSHOWS_PARENT_ID = 'pasteyouridhere';
-    const COLLECTIONS_PARENT_ID = 'pasteyouridhere';
-    const HOME1_PARENT_ID = 'pasteyouridhere';
-    const HOME2_PARENT_ID = 'pasteyouridhere';
+    const MOVIES_PARENT_ID = essentials.MOVIES_PARENT_ID || 'pasteyouridhere';
+    const TVSHOWS_PARENT_ID = essentials.TVSHOWS_PARENT_ID || 'pasteyouridhere';
+    const COLLECTIONS_PARENT_ID = essentials.COLLECTIONS_PARENT_ID || 'pasteyouridhere';
+    const HOME1_PARENT_ID = essentials.HOME1_PARENT_ID || 'pasteyouridhere';
+    const HOME2_PARENT_ID = essentials.HOME2_PARENT_ID || 'pasteyouridhere';
 
     // An ID still set to this placeholder means "not configured"
     const PLACEHOLDER_ID = 'pasteyouridhere';
@@ -645,8 +652,9 @@
     /**********************
      * BUTTON & CLICK LOGIC
      **********************/
-    const timerStates = [3, 6, 12, 24, 48]; // seconds
-    let currentTimerIndex = timerStates.indexOf(24); // default 24s
+    const timerStates = essentials.timerStates || [3, 6, 12, 24, 48]; // seconds
+    const defaultTimer = essentials.defaultTimer || 24;
+    let currentTimerIndex = Math.max(0, timerStates.indexOf(defaultTimer));
 
     const buildButton = () => {
         const btn = document.createElement('button');
@@ -672,7 +680,6 @@
                     if (manualMode) setModeAuto();
                     else setModeManual();
                 } else if (clickCount === 3) {
-                    if (currentTimerIndex < 0) currentTimerIndex = timerStates.indexOf(24);
                     currentTimerIndex = (currentTimerIndex + 1) % timerStates.length;
                     const newInterval = timerStates[currentTimerIndex] * 1000;
 
