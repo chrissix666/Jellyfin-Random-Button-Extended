@@ -241,6 +241,8 @@
     const AUTOMODE_MAX_BAD_PICKS = 3;
 
     const MOVIES_PARENT_ID = essentials.MOVIES_PARENT_ID || 'pasteyouridhere';
+    // The games library of the Playnite Bridge, a Movies library whose games are Movie items.
+    const GAMES_PARENT_ID = essentials.GAMES_PARENT_ID || 'pasteyouridhere';
     const TVSHOWS_PARENT_ID = essentials.TVSHOWS_PARENT_ID || 'pasteyouridhere';
     const COLLECTIONS_PARENT_ID = essentials.COLLECTIONS_PARENT_ID || 'pasteyouridhere';
     const HOME1_PARENT_ID = essentials.HOME1_PARENT_ID || 'pasteyouridhere';
@@ -442,7 +444,7 @@
             const { Items = [] } = await ApiClient.ajax({ type: 'GET', url, dataType: 'json' });
 
             let filtered;
-            if (parentId === MOVIES_PARENT_ID) filtered = Items.filter(i => i.Type === 'Movie');
+            if (parentId === MOVIES_PARENT_ID || parentId === GAMES_PARENT_ID) filtered = Items.filter(i => i.Type === 'Movie');
             else if (parentId === TVSHOWS_PARENT_ID) filtered = Items.filter(i => i.Type === 'Series');
             else if (parentId === COLLECTIONS_PARENT_ID && includeSets) filtered = Items.filter(i => i.Type === 'Set' || i.IsFolder);
             else if (parentId === HOME1_PARENT_ID || parentId === HOME2_PARENT_ID) filtered = Items.filter(i => i.Type === 'Video');
@@ -490,6 +492,7 @@
     const fetchSecondaryGlobalRandom = async () => {
         const idsArePlaceholder = [
             MOVIES_PARENT_ID,
+            GAMES_PARENT_ID,
             TVSHOWS_PARENT_ID,
             COLLECTIONS_PARENT_ID,
             HOME1_PARENT_ID,
@@ -584,10 +587,12 @@
             }
 
             if (!item) {
-                // A virtual item (e.g. a game of the Playnite Bridge) has no library in the page URL when it was opened from a tile:
-                // take the library the item itself belongs to. Movies and series are not virtual and stay as they were.
+                // A game of the Playnite Bridge is a virtual item and has no library in the page URL when it was opened from a tile:
+                // it picks from the games library when one is set, else from the library the item itself belongs to.
+                const isGame = currentItem && currentItem.LocationType === 'Virtual';
                 const parentIdCandidate = getCurrentLibraryParentId()
-                    || (currentItem && currentItem.LocationType === 'Virtual' ? currentItem.ParentId : null);
+                    || (isGame ? (GAMES_PARENT_ID !== PLACEHOLDER_ID ? GAMES_PARENT_ID : currentItem.ParentId) : null);
+                const inGames = parentIdCandidate === GAMES_PARENT_ID;
                 let includeSets = false;
 
                 if (onHome) includeSets = true;
@@ -595,7 +600,8 @@
 
                 item = parentIdCandidate ? await fetchRandomItem(parentIdCandidate, 1, includeSets) : null;
 
-                if (!item) {
+                // In the games library a pick that found nothing stays there instead of jumping to a movie or a series.
+                if (!item && !inGames) {
                     const fallback = onHome ? await fetchUnifiedFallback(true) : await fetchUnifiedFallback(false);
                     if (fallback) {
                         item = fallback.item;
