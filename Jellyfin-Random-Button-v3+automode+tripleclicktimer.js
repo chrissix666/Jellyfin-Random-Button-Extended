@@ -565,8 +565,9 @@
             // Home page; 'mypreferenceshome' counts too.
             const onHome = jfcompat.isRoute('home', 'mypreferenceshome');
             const currentId = getCurrentItemId();
+            let currentItem = null;
             if (currentId) {
-                const currentItem = await fetchCurrentItem(currentId);
+                currentItem = await fetchCurrentItem(currentId);
                 if (currentItem) {
                     item = await fetchRandomNext(currentItem);
                     if (currentItem.Type === 'Episode') parentId = currentItem.SeriesId;
@@ -583,7 +584,10 @@
             }
 
             if (!item) {
-                const parentIdCandidate = getCurrentLibraryParentId();
+                // A virtual item (e.g. a game of the Playnite Bridge) has no library in the page URL when it was opened from a tile:
+                // take the library the item itself belongs to. Movies and series are not virtual and stay as they were.
+                const parentIdCandidate = getCurrentLibraryParentId()
+                    || (currentItem && currentItem.LocationType === 'Virtual' ? currentItem.ParentId : null);
                 let includeSets = false;
 
                 if (onHome) includeSets = true;
